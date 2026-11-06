@@ -221,3 +221,25 @@ video.scan{width:100%;border-radius:18px;background:#000;aspect-ratio:4/3;object
 /* Légende du graphique de la semaine */
 .legend{display:flex;flex-wrap:wrap;gap:6px 14px;font-size:.74em;color:var(--muted);font-weight:700}
 .legend i{display:inline-block;width:10px;height:10px;border-radius:3px;margin-right:5px;vertical-align:-1px}
+
+/* Célébrations animées */
+.fx{position:absolute;inset:0;z-index:70;display:flex;align-items:center;justify-content:center;opacity:0;transition:opacity .25s ease-out}
+.fx.on{opacity:1}
+.fx.out{opacity:0;transition:opacity .45s ease-in}
+.fx-veil{position:absolute;inset:0;background:rgba(255,248,243,.45);backdrop-filter:blur(5px);-webkit-backdrop-filter:blur(5px)}
+:root[data-theme="dark"] .fx-veil{background:rgba(28,23,22,.5)}
+.fx-clip{position:relative;width:min(86%,420px);aspect-ratio:1;border-radius:32px;overflow:hidden;box-shadow:0 18px 50px rgba(194,86,59,.28);transform:scale(.92);transition:transform .35s cubic-bezier(.2,1.4,.4,1);background:#FFF8F3}
+.fx.on .fx-clip{transform:scale(1)}
+.fx-clip video{width:100%;height:100%;object-fit:cover;display:block}
+.fx-num{position:absolute;left:0;right:0;top:4%;text-align:center;font-family:var(--display);font-weight:600;color:#2B2421;line-height:1}
+.fx-num b{display:block;font-size:72px;letter-spacing:-1px}
+.fx-num span{display:block;font-family:var(--body);font-weight:800;font-size:17px;margin-top:6px;color:#6F625A}
+.fx-num span.small{display:inline-block;margin:0;font-family:var(--display);font-weight:600;font-size:19px;color:#2B2421;background:rgba(255,255,255,.75);border-radius:99px;padding:6px 14px}
+.fx-num.burn{top:20%}
+.fx-num.burn b{animation:fxBurn 1.7s .9s ease-in forwards}
+.fx-num.burn span{animation:fxFade .6s 1.6s forwards}
+@keyframes fxBurn{0%{color:#2B2421}25%{color:#E0612F;text-shadow:0 0 12px #FFB14A,0 0 26px #FF7A2F;transform:translateY(-2px) skewX(-2deg)}40%{color:#F28A2E;text-shadow:0 0 16px #FFD07A,0 0 34px #FF7A2F;transform:translateY(-6px) skewX(2deg)}60%{color:#C9B8AA;text-shadow:0 -6px 18px rgba(120,100,90,.5);transform:translateY(-18px) scale(1.04);filter:blur(2px);opacity:.8}100%{color:#D8CCC2;transform:translateY(-46px) scale(1.12);filter:blur(10px);opacity:0}}
+@keyframes fxFade{to{opacity:0}}
+.fx-msg{position:absolute;left:14px;right:14px;bottom:4%;text-align:center;font-family:var(--display);font-weight:600;font-size:17px;color:#2B2421;background:rgba(255,255,255,.8);border-radius:16px;padding:8px 12px;opacity:0;animation:fxIn .5s 1.2s forwards}
+.fx-num.burn ~ .fx-msg{color:#fff;background:none;text-shadow:0 2px 10px rgba(150,50,20,.6);animation-delay:1.9s}
+@keyframes fxIn{to{opacity:1}}

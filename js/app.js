@@ -310,6 +310,7 @@ function renderProfile() {
   <div class="card"><p class="h3">⭐ Mes favoris</p>
     ${favsTries().map(f => `<div class="line"><span class="grow"><span class="n">${esc(f.name)}</span><span class="q">${esc(f.qty)} · ${fmt(f.kcal)} kcal</span></span><button class="link" data-act="renFav" data-id="${f.id}">Renommer</button><button class="link danger" data-act="delFav" data-id="${f.id}">Retirer</button></div>`).join('') || '<p class="note">Touche l\'étoile ☆ à côté d\'un aliment pour l\'ajouter ici.</p>'}</div>
   <div class="card"><p class="h3">Affichage</p>
+    <button class="toggle" role="switch" aria-checked="${D.reglages.anim !== false}" data-act="anim"><span>Animations de célébration</span><span class="sw"></span></button>
     <div class="field"><span class="label">Thème</span><div class="seg">${[['auto', 'Auto'], ['light', 'Clair'], ['dark', 'Sombre']].map(([k, n]) => `<button class="${D.reglages.theme === k ? 'sel' : ''}" data-act="theme" data-v="${k}">${n}</button>`).join('')}</div></div>
     <div class="field"><span class="label">Taille du texte</span><div class="seg">${['A−', 'A', 'A+'].map((n, i) => `<button class="${D.reglages.fs === i ? 'sel' : ''}" data-act="fs" data-v="${i}">${n}</button>`).join('')}</div></div>
   </div>
@@ -542,8 +543,53 @@ function openResult(items, meal, title) {
 function addEntries(list, meal, msg) {
   list.forEach(e => { e.date = U.day; e.meal = meal; enrich(e); D.entries.push(e); });
   save(); U.tab = 'today'; render(); closeSheet();
+  const total = list.reduce((a, e) => a + (e.pending ? 0 : (+e.kcal || 0)), 0);
+  if (total > 0 && FX.repas(total)) return;
   toast(msg || pick(['C\'est noté 👍', 'Bien noté, continue comme ça ✨', 'Et un repas de plus dans le carnet 📒']));
 }
+
+/* ================== Célébrations animées ==================
+   Petits clips de 2 à 3 s joués par-dessus l'app (voile flou), puis fondu. Le texte est écrit par l'app,
+   par-dessus la vidéo, pour être exact. Toucher pour passer. Désactivables dans Profil. */
+const FX = (function () {
+  let dernierRepas = 0;
+  const actif = () => D.reglages.anim !== false && !matchMedia('(prefers-reduced-motion: reduce)').matches;
+  const mascotte = () => (D.profile && D.profile.sexe === 'H') ? 'bleue' : 'peche';
+  function jouer(clip, haut, bas, opts) {
+    const app = $('#app'), fx = document.createElement('div');
+    fx.className = 'fx'; fx.setAttribute('aria-hidden', 'true');
+    fx.innerHTML = `<div class="fx-veil"></div><div class="fx-clip"><video muted playsinline preload="auto" src="anim/${clip}.mp4"></video>
+      ${haut ? `<div class="fx-num ${opts && opts.burn ? 'burn' : ''}">${haut}</div>` : ''}${bas ? `<div class="fx-msg">${bas}</div>` : ''}</div>`;
+    app.appendChild(fx);
+    const v = fx.querySelector('video');
+    let fini = false;
+    const fin = () => { if (fini) return; fini = true; fx.classList.add('out'); setTimeout(() => fx.remove(), 450); };
+    v.addEventListener('error', () => { fin(); toast(String(bas || '').replace(/<[^>]+>/g, '') || 'C\'est noté 👍'); });
+    v.addEventListener('ended', fin);
+    fx.addEventListener('click', fin);
+    requestAnimationFrame(() => fx.classList.add('on'));
+    v.play().catch(() => {});
+    setTimeout(fin, (opts && opts.duree) || 3300);
+    return true;
+  }
+  return {
+    activite(kcal) {
+      if (!actif()) return false;
+      return jouer('activite', `<b>${fmt(kcal)}</b><span>kcal brûlées</span>`, 'Bravo, ça compte ! 🔥', { burn: true });
+    },
+    repas(kcal) {
+      if (!actif() || Date.now() - dernierRepas < 30000) return false;
+      dernierRepas = Date.now();
+      const [clip, msg] = kcal < 200 ? ['repas-petit', 'Un petit en-cas tout mignon 🦔'] : kcal <= 400 ? ['repas-moyen', 'Un bon repas, bien joué 🦊'] : ['repas-gros', 'Tu viens de manger comme un ours 🐻'];
+      return jouer(clip, `<span class="small">+ ${fmt(kcal)} kcal</span>`, msg);
+    },
+    poids(delta) {
+      if (!actif()) return false;
+      if (delta < 0) return jouer('poids-baisse-' + mascotte(), `<span class="small">−${fmt1(-delta)} kg</span>`, mascotte() === 'bleue' ? 'Bravo, tu peux être fier ! ✨' : 'Bravo, tu peux être fière ! ✨');
+      return jouer('poids-hausse-' + mascotte(), delta > 0 ? `<span class="small">+${fmt1(delta)} kg</span>` : '', 'Une semaine ne fait pas une tendance 💛');
+    }
+  };
+})();
 
 /* ================== Hors ligne : saisies en attente ================== */
 function queuePending(raw, kind, meal) {
@@ -610,7 +656,7 @@ function openActivity(meal) {
     root.querySelector('#ok').onclick = () => {
       const sp = SPORTS[st.s], montre = st.watch !== '';
       D.acts.push({ id: uid(), date: U.day, name: montre ? 'Montre connectée' : sp[1], e: montre ? '⌚' : sp[0], min: montre ? 0 : st.min, kcal: est() });
-      save(); closeSheet(); U.tab = 'today'; render(); toast('Bravo, ça compte ! 🔥');
+      save(); closeSheet(); U.tab = 'today'; render(); if (!FX.activite(est())) toast('Bravo, ça compte ! 🔥');
     };
   });
 }
@@ -629,6 +675,7 @@ function openWeigh() {
       D.weights = D.weights.filter(w => w.date !== T); D.weights.push({ date: T, kg: st.kg }); D.profile.poids = st.kg;
       save(); closeSheet(); render();
       const d = prev ? st.kg - prev.kg : 0;
+      if (prev && FX.poids(Math.round(d * 10) / 10)) return;
       toast(!prev ? 'Première pesée notée 🌱' : d < 0 ? `−${fmt1(-d)} kg, bien joué 🌱` : d === 0 ? 'Stable, c\'est une victoire aussi 🙂' : 'Noté. Une semaine ne fait pas une tendance 💛', null, null, 4000);
     };
   });
@@ -821,6 +868,7 @@ const ACT = {
   wk: el => { U.weekOff += +el.dataset.d; render(); }, wr: el => { U.wRange = el.dataset.r; render(); },
   feel: el => { D.feels[U.day] = el.dataset.f; save(); render(); toast(pick(PHRASES[el.dataset.f]), null, null, 4000); },
   feelReset: () => { delete D.feels[U.day]; save(); render(); },
+  anim: () => { D.reglages.anim = D.reglages.anim === false; save(); render(); },
   theme: el => { D.reglages.theme = el.dataset.v; save(); applyLook(); render(); },
   fs: el => { D.reglages.fs = +el.dataset.v; save(); applyLook(); render(); },
   export: exportData, import: () => $('#importFile').click(),
