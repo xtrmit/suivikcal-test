@@ -148,6 +148,9 @@ function renderToday() {
   const acts = D.acts.filter(a => a.date === day);
   if (acts.length) h += `<div class="card" style="gap:4px"><div class="meal-h"><span>🔥</span><span class="t grow">Activités</span><span class="k num">+${fmt(b)} kcal</span></div>
     ${acts.map(a => `<button class="line" data-act="delAct" data-id="${a.id}"><span class="grow"><span class="n">${a.e} ${esc(a.name)}</span><span class="q">${a.min ? a.min + ' min' : 'valeur de la montre'} · toucher pour retirer</span></span><span class="kc num" style="color:var(--sage)">+${fmt(a.kcal)}</span></button>`).join('')}</div>`;
+  const plancher = D.profile && D.profile.sexe === 'H' ? 1500 : 1200;
+  if (day === T && b > 0 && new Date().getHours() >= 19 && ate - b < plancher)
+    h += `<div class="card soft"><p class="h3">🍲 Belle séance aujourd'hui !</p><p class="note" style="color:var(--text)">Une fois le sport déduit, tu n'as gardé que <b class="num">${fmt(Math.max(0, ate - b))} kcal</b>. Pense à bien manger ce soir, ton corps en a besoin pour récupérer.</p></div>`;
   h += adviceCard(g, P, day);
   const fe = D.feels[day];
   if (fe || day < T || new Date().getHours() >= 19) {
@@ -229,9 +232,16 @@ async function fetchRecap(mon) {
   finally { recapBusy = false; }
 }
 
+/* Calories brûlées au-delà de ce qui a été mangé (ex. activité un jour sans repas noté) : petite pastille verte « +N ». */
+function pastille(cx, yb, v) {
+  if (v <= 0) return '';
+  const t = '+' + fmt(v), w = t.length * 6 + 10;
+  return `<g class="pill"><rect x="${cx - w / 2}" y="${yb - 13}" width="${w}" height="14" rx="7" fill="var(--sage)"/><text x="${cx}" y="${yb - 3}" text-anchor="middle" style="fill:#fff;font-weight:800">${t}</text></g>`;
+}
+
 function renderWeek() {
   const T = today(), mon = addDays(monday(T), 7 * U.weekOff), s = weekStats(mon), g = s.g;
-  const W = 320, H = 150, top = 12, bot = 24, max = Math.max(g * 1.4, ...s.days.map(x => x.ate));
+  const W = 320, H = 150, top = 12, bot = 24, max = Math.max(g * 1.4, ...s.days.map(x => x.ate * (x.brule > x.ate ? 1.25 : 1.1)));
   const y = v => top + (H - top - bot) * (1 - v / max), bw = 26, gap = W / 7;
   /* Barre = tout ce qui a été mangé. Bas (corail) : le « net » ; haut (vert sauge) : la part compensée par le sport. */
   const bars = s.days.map((x, i) => {
@@ -241,9 +251,9 @@ function renderWeek() {
     return `<clipPath id="cb${i}"><rect x="${cx - bw / 2}" y="${H - bot - h}" width="${bw}" height="${Math.max(h, 0)}" rx="7"/></clipPath>
     <g clip-path="url(#cb${i})"><rect x="${cx - bw / 2}" y="${H - bot - hNet}" width="${bw}" height="${Math.max(hNet, 0)}" fill="${over ? 'var(--peach)' : 'var(--accent)'}"/>
     ${hB > 0 ? `<rect x="${cx - bw / 2}" y="${H - bot - h}" width="${bw}" height="${hB}" fill="var(--sage)" opacity=".85"/>` : ''}</g>
-    <text x="${cx}" y="${H - 8}" text-anchor="middle">${JOURS_LONG[i]}</text>${x.ate ? `<text x="${cx}" y="${H - bot - h - 4}" text-anchor="middle">${fmt(x.ate)}</text>` : ''}`;
+    <text x="${cx}" y="${H - 8}" text-anchor="middle">${JOURS_LONG[i]}</text>${x.ate ? `<text x="${cx}" y="${H - bot - h - 4}" text-anchor="middle">${fmt(x.ate)}</text>` : ''}${pastille(cx, H - bot - h - (x.ate ? 16 : 4), x.brule - brule)}`;
   }).join('');
-  const legende = s.days.some(x => x.brule > 0 && x.ate > 0) ? `<div class="legend"><span><i style="background:var(--accent)"></i>Mangé, une fois le sport déduit</span><span><i style="background:var(--sage)"></i>Compensé par le sport</span></div>` : '';
+  const legende = s.days.some(x => x.brule > 0 && x.ate > 0) ? `<div class="legend"><span><i style="background:var(--accent)"></i>Mangé, une fois le sport déduit</span><span><i style="background:var(--sage)"></i>Compensé par le sport</span>${s.days.some(x => x.brule > x.ate) ? '<span><i style="background:var(--sage);border-radius:6px"></i>+N : brûlé en plus de ce qui a été mangé</span>' : ''}</div>` : (s.days.some(x => x.brule > x.ate) ? '<div class="legend"><span><i style="background:var(--sage);border-radius:6px"></i>+N : brûlé un jour sans repas noté</span></div>' : '');
   const label = U.weekOff === 0 ? 'Cette semaine' : U.weekOff === -1 ? 'Semaine dernière' : 'Il y a ' + (-U.weekOff) + ' semaines';
   const recapMon = U.weekOff === 0 ? addDays(mon, -7) : mon;
   const recap = D.recaps[recapMon];
